@@ -84,6 +84,21 @@ func safe_join(base_dir: String, name: String) -> String:
 	return base_dir.path_join(name)
 
 
+# Returns a sanitized copy of `world` safe to interpolate inside a cmd /C
+# command. The game engine must be launched from its own directory (Godot 4
+# has no CWD setter, so we use `cd /d`), and the original code interpolated an
+# unsanitized world name into that command -- a crafted save/world name could
+# break the quoting and inject commands (RCE on Resume). Only the strict
+# allow-list below is permitted; anything else returns "" so the caller drops
+# --world instead of risking injection.
+func sanitize_world_name(world: String) -> String:
+	
+	var allowed := RegEx.create_from_string("^[A-Za-z0-9 _\\-]+$")
+	if allowed.search(world) != null:
+		return world
+	return ""
+
+
 # Opens `meta` via OS.shell_open ONLY for http(s) web links. The value can come
 # from remote data (GitHub release/changelog URLs), so a crafted value
 # (file://..., a dangerous protocol handler, an UNC path) must never reach the

@@ -442,7 +442,20 @@ func _start_game(world := "") -> void:
 			var params := ["--userdir", Paths.userdata + "/"]
 			if world != "":
 				params.append_array(["--world", world])
-			OS.execute_with_pipe(Paths.game_dir.path_join(exe_file), params)
+			# The engine needs its own directory as the working directory so it
+			# can find data/. Godot 4 has no CWD setter, so we use cmd's cd /d.
+			# To keep this injection-safe (a crafted world name must not break
+			# the quoting and inject commands), the world name is validated
+			# against a strict allow-list first; unsafe names launch without
+			# --world and surface an error instead.
+			var world_arg := ""
+			if world != "":
+				if world == Helpers.sanitize_world_name(world):
+					world_arg = " --world \"%s\"" % world
+				else:
+					Status.post(tr("msg_world_unsafe"), Enums.MSG_ERROR)
+			var command = "cd /d \"%s\" && start \"\" \"%s\" --userdir \"%s/\"%s" % [Paths.game_dir, exe_file, Paths.userdata, world_arg]
+			OS.execute_with_pipe("cmd", ["/C", command])
 		_:
 			return
 	
