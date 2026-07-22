@@ -414,14 +414,31 @@ func _on_BtnPlay_pressed() -> void:
 	_start_game()
 
 
+func _world_name_from(path: String) -> String:
+	
+	var info = Helpers.load_json_file(path)
+	if info is Dictionary and "world_name" in info and info["world_name"] is String:
+		return Helpers.sanitize_world_name(info["world_name"])
+	return ""
+
+
 func _on_BtnResume_pressed() -> void:
 	
 	var lastworld: String = Paths.config.path_join("lastworld.json")
-	var info = Helpers.load_json_file(lastworld)
-	if info is Dictionary and "world_name" in info and info["world_name"] is String:
-		_start_game(info["world_name"])
-	else:
-		Status.post(tr("msg_resume_no_world"), Enums.MSG_ERROR)
+	# Catapult's own record of the last played world (written when the game is
+	# launched through Catapult, since we pass --userdir .../userdata/).
+	if FileAccess.file_exists(lastworld):
+		_start_game(_world_name_from(lastworld))
+		return
+	# Fallback: the game engine also writes lastworld.json next to its own
+	# executable (e.g. when launched manually or by another launcher). This
+	# covers the common case where Resume appeared dead because the file lived
+	# in the game dir, not in Catapult's userdata/config.
+	var native := Paths.last_world_file
+	if FileAccess.file_exists(native):
+		_start_game(_world_name_from(native))
+		return
+	Status.post(tr("msg_resume_no_world"), Enums.MSG_ERROR)
 
 
 func _start_game(world := "") -> void:
@@ -513,7 +530,10 @@ func _refresh_currently_installed() -> void:
 	if game in _installs:
 		_lbl_build.text = active_name
 		_btn_play.disabled = false
-		_btn_resume.disabled = not (FileAccess.file_exists(Paths.config.path_join("lastworld.json")))
+		_btn_resume.disabled = not (
+			FileAccess.file_exists(Paths.config.path_join("lastworld.json"))
+			or FileAccess.file_exists(Paths.last_world_file)
+		)
 		_btn_game_dir.visible = true
 		_btn_user_dir.visible = true
 		if (_lst_builds.selected != -1) and (_lst_builds.selected < len(releases)):

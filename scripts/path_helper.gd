@@ -23,6 +23,15 @@ var mod_repo: String: get = _get_modrepo_dir
 var tmp_dir: String: get = _get_tmp_dir
 var utils_dir: String: get = _get_utils_dir
 var save_backups: String: get = _get_save_backups_dir
+# The engine's own "last played world" record, written to <game_dir>/config/
+# when the game is launched manually (by double-clicking the exe or another
+# launcher) rather than through Catapult. Catapult's copy lives in
+# userdata/config (see `config`). Resume checks both.
+var last_world_file: String: get = _get_last_world_file
+
+
+func _get_last_world_file() -> String:
+	return _get_game_dir().path_join("config").path_join("lastworld.json")
 
 var _last_active_install_name := ""
 var _last_active_install_dir := ""
