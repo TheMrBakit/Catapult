@@ -68,36 +68,56 @@ func parse_mods_dir(mods_dir: String) -> Dictionary:
 		if FileAccess.file_exists(modinfo):
 			
 			var f := FileAccess.open(modinfo, FileAccess.READ)
+			if f == null:
+				Status.post(tr("msg_mod_json_parsing_failed") % modinfo, Enums.MSG_ERROR)
+				continue
 			var json := JSON.new()
 			var error := json.parse(f.get_as_text())
+			f.close()
 			if error != OK:
 				Status.post(tr("msg_mod_json_parsing_failed") % modinfo, Enums.MSG_ERROR)
 				continue
 			
 			var json_result = json.data
+			# modinfo.json is untrusted: it ships inside downloaded mod archives.
+			# Only accept the shapes we expect (a single object, or an array of
+			# objects) and reject anything else instead of trusting json.data.
 			if typeof(json_result) == TYPE_DICTIONARY:
 				json_result = [json_result]
+			elif typeof(json_result) != TYPE_ARRAY:
+				Status.post(tr("msg_mod_json_parsing_failed") % modinfo, Enums.MSG_ERROR)
+				continue
 			
 			for item in json_result:
-				if ("type" in item) and (item["type"] == "MOD_INFO"):
+				if (typeof(item) == TYPE_DICTIONARY) and ("type" in item) and (item["type"] == "MOD_INFO"):
 					
 					var info = item
+					# Fields flow into UI/BBCode and (via the id) into lookups
+					# and on-disk paths; coerce/validate before trusting them.
+					if not (("name" in info) and (typeof(info["name"]) == TYPE_STRING)):
+						continue
 					info["name"] = _strip_html_tags(info["name"])
-					if "description" in info:
+					if ("description" in info) and (typeof(info["description"]) == TYPE_STRING):
 						info["description"] = _strip_html_tags(info["description"])
 					if not "id" in info:  # Since not all mods have IDs, apparently!
-						if "ident" in info:
+						if ("ident" in info) and (typeof(info["ident"]) == TYPE_STRING):
 							info["id"] = info["ident"]
 						else:
 							info["id"] = info["name"]
+					if typeof(info["id"]) != TYPE_STRING:
+						info["id"] = str(info["id"])
+					# Neutralise path-traversal / separators in the remote id.
+					var safe_id := _sanitize_mod_id(info["id"])
+					if safe_id == "":
+						Status.post(tr("msg_mod_json_parsing_failed") % modinfo, Enums.MSG_ERROR)
+						break
+					info["id"] = safe_id
 					
 					result[info["id"]] = {
 						"location": mods_dir + "/" + subdir,
 						"modinfo": info
 					}
 					break
-					
-			f.close()
 	
 	return result
 
@@ -113,6 +133,30 @@ func _strip_html_tags(text: String) -> String:
 		var m: RegExMatch = match_
 		s = s.replace(m.get_string(), "")
 		
+	return s
+
+
+func _sanitize_mod_id(raw_id: String) -> String:
+	
+	# Mod IDs come from untrusted modinfo.json files bundled in downloaded
+	# archives and are used as dictionary keys and (indirectly) in on-disk
+	# paths. Strip any path separators, traversal sequences and control
+	# characters so a hostile mod cannot escape its directory or collide with
+	# engine paths. Returns "" if nothing usable remains.
+	
+	var s := raw_id.strip_edges()
+	# Drop directory separators, drive/colon, null and other control chars.
+	var regex := RegEx.new()
+	regex.compile("[\\x00-\\x1f/\\\\:]+")
+	s = regex.sub(s, "_", true)
+	# Collapse any leftover ".." traversal tokens.
+	while s.find("..") != -1:
+		s = s.replace("..", "_")
+	s = s.strip_edges()
+	# Reject values that are purely dots/underscores (e.g. ".", "..").
+	var stripped := s.replace(".", "").replace("_", "").strip_edges()
+	if stripped == "":
+		return ""
 	return s
 
 

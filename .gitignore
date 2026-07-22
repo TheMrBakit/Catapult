@@ -14,3 +14,10 @@ git_api.gdns
 
 # vscode
 .vscode
+
+# Plaintext settings file (catapult_settings.json) — can hold proxy creds /
+# tokens and must never be committed accidentally.
+catapult_settings.json
+
+# Local debug/log artifacts
+*.log

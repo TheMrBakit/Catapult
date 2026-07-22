@@ -144,28 +144,36 @@ func _sorting_comparison(a: Dictionary, b: Dictionary) -> bool:
 func _array_to_text_list(array) -> String:
 	
 	if typeof(array) == TYPE_STRING:  # Damn you Fuji :)
-		return array
+		return _escape_bbcode(array)
 	
 	var result = ""
 	
-	if len(array) > 0:
+	if typeof(array) == TYPE_ARRAY and len(array) > 0:
 		
 		for value in array:
-			result += value + ", "
+			result += _escape_bbcode(str(value)) + ", "
 		
 		result = result.substr(0, len(result) - 2)
 	
 	return result
 
 
+func _escape_bbcode(text: String) -> String:
+	
+	# modinfo fields come from untrusted, downloaded modinfo.json files and are
+	# rendered into a BBCode RichTextLabel. Neutralise "[" so a hostile mod
+	# cannot inject BBCode tags (e.g. [url], [img]) into the info panel.
+	return text.replace("[", "[lb]")
+
+
 func _make_mod_info_string(mod: Dictionary) -> String:
 	
 	var result = ""
 	var modinfo = mod["modinfo"]
-	result += "[u]%s[/u] %s" % [tr("str_mod_name") ,modinfo["name"]]
+	result += "[u]%s[/u] %s" % [tr("str_mod_name") , _escape_bbcode(str(modinfo["name"]))]
 	
 	if "id" in modinfo:
-		result += " ([u]ID:[/u] %s)" % modinfo["id"]
+		result += " ([u]ID:[/u] %s)" % _escape_bbcode(str(modinfo["id"]))
 	
 	result += "\n"
 	
@@ -176,10 +184,10 @@ func _make_mod_info_string(mod: Dictionary) -> String:
 		result += "[u]%s[/u] %s\n" % [tr("str_mod_maintainers"), _array_to_text_list(modinfo["maintainers"])]
 		
 	if "category" in modinfo:
-		result += "[u]%s[/u] %s\n" % [tr("str_mod_category"), modinfo["category"]]
+		result += "[u]%s[/u] %s\n" % [tr("str_mod_category"), _escape_bbcode(str(modinfo["category"]))]
 	
 	if "description" in modinfo:
-		result += "[u]%s[/u] %s\n" % [tr("str_mod_description"), modinfo["description"]]
+		result += "[u]%s[/u] %s\n" % [tr("str_mod_description"), _escape_bbcode(str(modinfo["description"]))]
 	
 	result = result.rstrip("\n")
 	return result

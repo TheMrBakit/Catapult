@@ -109,7 +109,7 @@ func process_pr_data(data):
 
 
 func _on_ChangelogText_meta_clicked(meta):
-	OS.shell_open(str(meta))
+	Helpers.safe_shell_open(str(meta))
 
 
 class PullRequest:

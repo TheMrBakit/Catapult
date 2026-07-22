@@ -259,7 +259,7 @@ func _on_backup_operation_finished() -> void:
 
 func _on_Description_meta_clicked(meta) -> void:
 	
-	OS.shell_open(meta)
+	Helpers.safe_shell_open(str(meta))
 
 
 func _on_ChangelogLink_meta_clicked(_meta) -> void:
@@ -269,7 +269,7 @@ func _on_ChangelogLink_meta_clicked(_meta) -> void:
 
 func _on_Log_meta_clicked(meta) -> void:
 	
-	OS.shell_open(meta)
+	Helpers.safe_shell_open(str(meta))
 
 
 func _on_BtnRefresh_pressed() -> void:
@@ -418,8 +418,10 @@ func _on_BtnResume_pressed() -> void:
 	
 	var lastworld: String = Paths.config.path_join("lastworld.json")
 	var info = Helpers.load_json_file(lastworld)
-	if info:
+	if info is Dictionary and "world_name" in info and info["world_name"] is String:
 		_start_game(info["world_name"])
+	else:
+		Status.post(tr("msg_resume_no_world"), Enums.MSG_ERROR)
 
 
 func _start_game(world := "") -> void:
@@ -431,16 +433,16 @@ func _start_game(world := "") -> void:
 				params.append_array(["--world", world])
 			OS.execute_with_pipe(Paths.game_dir.path_join("cataclysm-launcher"), params)
 		"Windows":
-			var world_str := ""
-			if world != "":
-				world_str = "--world \"%s\"" % world
-
 			var exe_file = "cataclysm-tiles.exe"
 			if Settings.read("game") == "bn" and FileAccess.file_exists(Paths.game_dir.path_join("cataclysm-bn-tiles.exe")):
 				exe_file = "cataclysm-bn-tiles.exe"
-
-			var command = "cd /d %s && start %s --userdir \"%s/\" %s" % [Paths.game_dir, exe_file, Paths.userdata, world_str]
-			OS.execute_with_pipe("cmd", ["/C", command])
+			# No shell: launch the game directly with an argument array (mirrors the
+			# safe Linux path above). Building a cmd /C string from world_name let a
+			# crafted save/world name break quoting and inject commands (RCE on Resume).
+			var params := ["--userdir", Paths.userdata + "/"]
+			if world != "":
+				params.append_array(["--world", world])
+			OS.execute_with_pipe(Paths.game_dir.path_join(exe_file), params)
 		_:
 			return
 	

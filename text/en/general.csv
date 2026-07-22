@@ -25,3 +25,5 @@
 "tab_fonts","Fonts"
 "tab_backups","Backups"
 "tab_settings","Settings"
+"msg_json_unexpected_shape","Unexpected JSON shape in %s (expected an object or array)."
+"msg_shell_open_rejected","Refused to open unsafe link: %s"

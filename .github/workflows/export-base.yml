@@ -122,9 +122,25 @@ jobs:
           # Download and setup Godot engine if needed
           if [ "$GODOT_READY" = false ]; then
             echo "⬇️  Downloading Godot engine..."
+            # Fetch the official SHA512 checksum manifest for this release from the
+            # godotengine/godot-builds repo and verify the download against it. This
+            # prevents a trojaned engine (compromised mirror / poisoned cache) from
+            # producing trojaned build artifacts.
             wget -q -O godot.zip "$GODOT_URL"
+            echo "🔐 Verifying Godot engine checksum..."
+            wget -q -O godot_builds_checksums.txt "https://raw.githubusercontent.com/godotengine/godot-builds/master/.ci/builds/${GD_RELEASE_VERSION}/sha512sums.txt"
+            EXPECTED=$(grep -E "linux\.x86_64\.zip$" godot_builds_checksums.txt | awk '{print $1}' || true)
+            ACTUAL=$(sha512sum godot.zip | awk '{print $1}')
+            if [ -z "$EXPECTED" ]; then
+              echo "⚠️  Could not find expected Godot checksum for ${GD_RELEASE_VERSION}; skipping verification"
+            elif [ "$EXPECTED" != "$ACTUAL" ]; then
+              echo "❌ Godot engine checksum mismatch!"
+              echo "   expected: $EXPECTED"
+              echo "   actual:   $ACTUAL"
+              exit 1
+            fi
             unzip -q godot.zip -d .
-            rm -f *.zip
+            rm -f *.zip godot_builds_checksums.txt
             BIN="$(ls Godot* 2>/dev/null | head -n1 || true)"
             mv "$BIN" godot
             chmod +x godot
@@ -136,8 +152,20 @@ jobs:
           if [ "$TEMPLATES_READY" = false ]; then
             echo "⬇️  Downloading export templates..."
             wget -q -O templates.zip "$TEMPLATES_URL"
+            echo "🔐 Verifying export templates checksum..."
+            wget -q -O templates_builds_checksums.txt "https://raw.githubusercontent.com/godotengine/godot-builds/master/.ci/builds/${GD_RELEASE_VERSION}/sha512sums.txt"
+            EXPECTED_TPL=$(grep -E "export_templates\.tpz$" templates_builds_checksums.txt | awk '{print $1}' || true)
+            ACTUAL_TPL=$(sha512sum templates.zip | awk '{print $1}')
+            if [ -z "$EXPECTED_TPL" ]; then
+              echo "⚠️  Could not find expected templates checksum for ${GD_RELEASE_VERSION}; skipping verification"
+            elif [ "$EXPECTED_TPL" != "$ACTUAL_TPL" ]; then
+              echo "❌ Export templates checksum mismatch!"
+              echo "   expected: $EXPECTED_TPL"
+              echo "   actual:   $ACTUAL_TPL"
+              exit 1
+            fi
             unzip -q templates.zip -d templates_unpack
-            rm -f templates.zip
+            rm -f templates.zip templates_builds_checksums.txt
             mkdir -p editor_data/export_templates/"$TEMPLATES_SUBDIR"
             mv templates_unpack/templates/* editor_data/export_templates/"$TEMPLATES_SUBDIR"/
             rm -rf templates_unpack

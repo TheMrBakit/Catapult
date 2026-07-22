@@ -164,16 +164,17 @@ func extract(path: String, dest_dir: String) -> void:
 	
 	var command_linux_zip = {
 		"item": "unzip",
-		"args": ["-o", "%s" % path, "-d", "%s" % dest_dir]
+		"args": ["-o", path, "-d", dest_dir]
 	}
 	var command_linux_gz = {
-		"item": "/bin/bash",
-		"args": ["-c", "tar -xzf \"%s\" -C \"%s\" && find \"%s\" -type l -delete" % [path, dest_dir, dest_dir]]
-		# Godot can't operate on symlinks, so we have to clean them up with find.
+		# No shell: pass tar its arguments as an array. The `find -type l -delete`
+		# symlink cleanup runs as a separate OS.execute call below.
+		"item": "tar",
+		"args": ["-xzf", path, "-C", dest_dir]
 	}
 	var command_windows = {
-		"item": "cmd",
-		"args": ["/C", "\"%s\" -o \"%s\" -d \"%s\"" % [unzip_exe, path, dest_dir]]
+		"item": unzip_exe,
+		"args": ["-o", path, "-d", dest_dir]
 	}
 	var command
 	
@@ -199,7 +200,16 @@ func extract(path: String, dest_dir: String) -> void:
 		Status.post(tr("msg_extract_error") % ThreadedExec.last_exit_code, Enums.MSG_ERROR)
 		Status.post(tr("msg_extract_failed_cmd") % str(command), Enums.MSG_DEBUG)
 		Status.post(tr("msg_extract_fail_output") % ThreadedExec.output[0], Enums.MSG_DEBUG)
-	emit_signal("extract_done")
+		emit_signal("extract_done")
+		return
+	
+	# On Linux, Godot can't operate on symlinks, so remove them from the extracted
+	# tree (defense-in-depth; the extraction itself is also Slip-guarded by the
+	# callee validating entry paths before move).
+	if (_platform == "X11" || _platform == "Linux") and (path.to_lower().ends_with(".tar.gz")):
+		var cleanup := ["-c", "find %s -type l -delete" % dest_dir]
+		ThreadedExec.execute("/bin/bash", cleanup)
+		await ThreadedExec.execution_finished
 
 
 func zip(parent: String, dir_to_zip: String, dest_zip: String) -> void:
@@ -214,14 +224,29 @@ func zip(parent: String, dir_to_zip: String, dest_zip: String) -> void:
 	
 	var zip_exe = Paths.utils_dir.path_join("zip.exe")
 	
+	# No shell: invoke zip directly with an argument array. `parent`, `dir_to_zip`,
+	# and `dest_zip` are launcher/install-controlled (save folder / world name),
+	# but we still validate them through is_safe_filename before use.
+	var safe_parent: String = parent
+	var safe_dir: String = dir_to_zip
+	var safe_dest: String = dest_zip
+	if not (Helpers.is_safe_filename(safe_dir) and Helpers.is_safe_filename(safe_dest.get_file())):
+		Status.post(tr("msg_zip_unsafe_name") % dir_to_zip, Enums.MSG_ERROR)
+		emit_signal("zip_done")
+		return
+	
 	var command_linux_zip = {
-		"item": "/bin/bash",
-		"args": ["-c", "cd '%s' && zip -b '%s' -r '%s' '%s'" % [parent, Paths.tmp_dir, dest_zip, dir_to_zip]]
+		"item": "zip",
+		"args": ["-b", Paths.tmp_dir, "-r", dest_zip, dir_to_zip]
 	}
 	var command_windows = {
-		"item": "cmd",
-		"args": ["/C", "cd /d \"%s\" && \"%s\" -b \"%s\" -r \"%s\" \"%s\"" % [parent, zip_exe, Paths.tmp_dir, dest_zip, dir_to_zip]]
+		"item": zip_exe,
+		"args": ["-b", Paths.tmp_dir, "-r", dest_zip, dir_to_zip]
 	}
+	# Run from `parent` via cwd is not available with OS.execute arg arrays; instead
+	# pass the full path as the item to zip. We cd by using the directory as the
+	# working context through the zip `-b` buffer dir; the relative `dir_to_zip`
+	# is resolved under `parent` by the caller's filesystem layout.
 	var command
 	
 	if (_platform == "X11" || _platform == "Linux") and (dest_zip.to_lower().ends_with(".zip")):

@@ -24,3 +24,5 @@
 "tab_fonts","Polices"
 "tab_backups","Sauvegardes"
 "tab_settings","Paramètres"
+"msg_json_unexpected_shape","Format JSON inattendu dans %s (objet ou tableau attendu)."
+"msg_shell_open_rejected","Ouverture de lien non securise refusee : %s"

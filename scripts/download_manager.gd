@@ -48,8 +48,16 @@ func download_file(url: String, target_dir: String, target_filename: String) -> 
 	Status.post(tr("msg_downloading_file") % target_filename)
 	emit_signal("download_started")
 	_current_filename = target_filename
-	_current_file_path = target_dir.path_join(target_filename)
-	_http.download_file = target_dir + "/" + target_filename
+	# Confine the destination path: the filename may come from a remote-controlled
+	# GitHub asset name. Reject unsafe names outright (path traversal / overwrite),
+	# and always build the path with safe_join (normalized, basename-only).
+	var safe_path := Helpers.safe_join(target_dir, target_filename)
+	if safe_path == "":
+		Status.post(tr("msg_download_unsafe_filename") % target_filename, Enums.MSG_ERROR)
+		emit_signal("download_finished")
+		return
+	_current_file_path = safe_path
+	_http.download_file = safe_path
 	_http.request(url)
 	_download_ongoing = true
 	var last_progress_time = Time.get_ticks_msec()
