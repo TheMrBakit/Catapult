@@ -196,6 +196,7 @@ func extract(path: String, dest_dir: String) -> void:
 	
 	ThreadedExec.execute(command["item"], command["args"])
 	await ThreadedExec.execution_finished
+	last_extract_result = ThreadedExec.last_exit_code
 	if ThreadedExec.last_exit_code != 0:
 		Status.post(tr("msg_extract_error") % ThreadedExec.last_exit_code, Enums.MSG_ERROR)
 		Status.post(tr("msg_extract_failed_cmd") % str(command), Enums.MSG_DEBUG)
@@ -210,6 +211,10 @@ func extract(path: String, dest_dir: String) -> void:
 		var cleanup := ["-c", "find %s -type l -delete" % dest_dir]
 		ThreadedExec.execute("/bin/bash", cleanup)
 		await ThreadedExec.execution_finished
+
+	# Success: record the exit code and notify the awaiting caller(s).
+	last_extract_result = ThreadedExec.last_exit_code
+	emit_signal("extract_done")
 
 
 func zip(parent: String, dir_to_zip: String, dest_zip: String) -> void:
@@ -237,11 +242,11 @@ func zip(parent: String, dir_to_zip: String, dest_zip: String) -> void:
 	
 	var command_linux_zip = {
 		"item": "zip",
-		"args": ["-b", Paths.tmp_dir, "-r", dest_zip, dir_to_zip]
+		"args": ["-b", Paths.tmp_dir, "-r", dest_zip, parent.path_join(dir_to_zip)]
 	}
 	var command_windows = {
 		"item": zip_exe,
-		"args": ["-b", Paths.tmp_dir, "-r", dest_zip, dir_to_zip]
+		"args": ["-b", Paths.tmp_dir, "-r", dest_zip, parent.path_join(dir_to_zip)]
 	}
 	# Run from `parent` via cwd is not available with OS.execute arg arrays; instead
 	# pass the full path as the item to zip. We cd by using the directory as the
@@ -265,6 +270,7 @@ func zip(parent: String, dir_to_zip: String, dest_zip: String) -> void:
 	
 	ThreadedExec.execute(command["item"], command["args"])
 	await ThreadedExec.execution_finished
+	last_zip_result = ThreadedExec.last_exit_code
 	if ThreadedExec.last_exit_code != 0:
 		Status.post(tr("msg_zip_error") % ThreadedExec.last_exit_code, Enums.MSG_ERROR)
 		Status.post(tr("msg_extract_failed_cmd") % str(command), Enums.MSG_DEBUG)
