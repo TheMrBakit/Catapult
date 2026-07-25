@@ -10,7 +10,7 @@ var last_exit_code := 0
 
 func execute(path: String, args: PackedStringArray) -> void:
 	var thread := Thread.new()
-	var exec_func := OS.execute.bind(path, args, output, true, true)
+	var exec_func := OS.execute.bind(path, args, output, true, false)
 	thread.start(exec_func)
 	while thread.is_alive():
 		await get_tree().process_frame
