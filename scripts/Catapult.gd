@@ -418,7 +418,7 @@ func _world_name_from(path: String) -> String:
 	
 	var info = Helpers.load_json_file(path)
 	if info is Dictionary and "world_name" in info and info["world_name"] is String:
-		return Helpers.sanitize_world_name(info["world_name"])
+		return info["world_name"]
 	return ""
 
 
@@ -453,24 +453,15 @@ func _start_game(world := "") -> void:
 			var exe_file = "cataclysm-tiles.exe"
 			if Settings.read("game") == "bn" and FileAccess.file_exists(Paths.game_dir.path_join("cataclysm-bn-tiles.exe")):
 				exe_file = "cataclysm-bn-tiles.exe"
-			# No shell: launch the game directly with an argument array (mirrors the
-			# safe Linux path above). Building a cmd /C string from world_name let a
-			# crafted save/world name break quoting and inject commands (RCE on Resume).
-			var params := ["--userdir", Paths.userdata + "/"]
-			if world != "":
-				params.append_array(["--world", world])
 			# The engine needs its own directory as the working directory so it
 			# can find data/. Godot 4 has no CWD setter, so we use cmd's cd /d.
-			# To keep this injection-safe (a crafted world name must not break
-			# the quoting and inject commands), the world name is validated
-			# against a strict allow-list first; unsafe names launch without
-			# --world and surface an error instead.
+			# The world name comes from our own/engine lastworld.json (trusted
+			# local file). Escape any embedded quote so it cannot break the cmd
+			# quoting; legitimate names (spaces, accents) resume correctly.
 			var world_arg := ""
 			if world != "":
-				if world == Helpers.sanitize_world_name(world):
-					world_arg = " --world \"%s\"" % world
-				else:
-					Status.post(tr("msg_world_unsafe"), Enums.MSG_ERROR)
+				var safe_world = world.replace("\"", "\"\"")
+				world_arg = " --world \"%s\"" % safe_world
 			var command = "cd /d \"%s\" && start \"\" \"%s\" --userdir \"%s/\"%s" % [Paths.game_dir, exe_file, Paths.userdata, world_arg]
 			OS.execute_with_pipe("cmd", ["/C", command])
 		_:
